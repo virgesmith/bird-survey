@@ -146,7 +146,7 @@ def transform(path: Path) -> None:
 
 
 def main(path: Path) -> None:
-    #extract(path)
+    extract(path)
     transform(path)
 
 
