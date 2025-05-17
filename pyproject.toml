@@ -1,0 +1,28 @@
+[project]
+name = "bird-survey"
+version = "0.1.0"
+description = "AI-powered bird survey data extraction tool"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "google-genai>=1.15.0",
+    "pandas>=2.2.3",
+    "pydantic>=2.11.4",
+    "python-dotenv>=1.1.0",
+    "typer>=0.15.4",
+    "xlsxwriter>=3.2.3",
+]
+
+[project.scripts]
+process = "bird_survey:main"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.10",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "Q", "I", "UP", "B", "SIM"]
+
+[tool.ruff]
+line-length = 120
