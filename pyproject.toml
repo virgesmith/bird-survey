@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "google-genai>=1.15.0",
     "pandas>=2.2.3",
+    "pandas-stubs>=2.2.3.250308",
     "pydantic>=2.11.4",
     "python-dotenv>=1.1.0",
     "typer>=0.15.4",
@@ -18,6 +19,7 @@ process = "bird_survey:main"
 
 [dependency-groups]
 dev = [
+    "mypy>=1.15.0",
     "ruff>=0.11.10",
 ]
 

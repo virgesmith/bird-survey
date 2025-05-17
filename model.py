@@ -157,5 +157,5 @@ class SurveyData(BaseModel):
 
 
 class Surveys(RootModel[list[SurveyData]]):
-    def __iter__(self) -> Iterator[SurveyData]:
+    def __iter__(self) -> Iterator[SurveyData]:  # type:ignore[override]
         return iter(self.root)

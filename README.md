@@ -1,8 +1,9 @@
 # Bird Survey
 
-Processes hand-written bird survey forms (scanned PDFs) into a spreadsheet, via a json schema:
+Uses a LLM (Google Gemini) to process hand-written bird survey forms (scanned PDFs) into a spreadsheet, via a json schema:
 
-![raw-data](./img/raw_data.png) ![json](./img/json.png)
+![raw-data](./img/raw_data.png)
+![json](./img/json.png)
 ![excel](./img/excel.png)
 
 Requires a .env file with a model and API key, e.g.

@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 import typer  # type: ignore[import-untyped]
@@ -20,7 +21,7 @@ def extract(path: Path) -> None:
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     model = os.environ["GEMINI_MODEL"]
 
-    surveys = []
+    surveys: list[SurveyData] = []
     # for some reason sending all the files at once appears to ignore all but one of them
     for file in files:
         typer.echo(f"Extracting data from {file}")
@@ -35,10 +36,10 @@ def extract(path: Path) -> None:
                 "response_schema": SurveyData,
             },
         )
-        surveys.append(response.parsed)
+        surveys.append(cast(SurveyData, response.parsed))
     output_file = path / "processed_surveys.json"
     with open(output_file, "w") as fd:
-        fd.write(Surveys(surveys).model_dump_json(indent=2))
+        fd.write(Surveys(surveys).model_dump_json(indent=2))  # type: ignore
     typer.echo(f"Wrote extracted data to {output_file}")
 
 
@@ -109,12 +110,12 @@ def transform(path: Path) -> None:
                     # Combine common, segment, and sighting data for this row
                     all_sightings.append({**segment_data, **sighting_data})
 
-            sighting_data = pd.DataFrame(all_sightings)
+            sightings_data = pd.DataFrame(all_sightings)
 
-            sighting_data.columns = [col.replace("_", " ").capitalize() for col in sighting_data.columns]
+            sightings_data.columns = pd.Index([col.replace("_", " ").capitalize() for col in sightings_data.columns])
 
             # Create the pandas DataFrame
-            sighting_data.to_excel(
+            sightings_data.to_excel(
                 writer,
                 sheet_name=sheet_name,
                 startrow=3,
@@ -141,7 +142,7 @@ def transform(path: Path) -> None:
 
             worksheet.set_column(1, 2, 25)
             worksheet.set_column(3, 3, 5)
-            worksheet.set_column(4, 4 + len(sighting_data.columns), 15)
+            worksheet.set_column(4, 4 + len(sightings_data.columns), 15)
     typer.echo("Done")
 
 
