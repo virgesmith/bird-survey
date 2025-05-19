@@ -16,7 +16,9 @@ dependencies = [
     "xlsxwriter>=3.2.3",
 ]
 
-package-mode = false
+packages = [
+    ".",
+]
 
 [dependency-groups]
 dev = [
