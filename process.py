@@ -1,8 +1,12 @@
+import csv
 import json
 import os
+from datetime import datetime
+from io import BytesIO, StringIO
 from pathlib import Path
 from typing import cast
 
+import openpyxl
 import pandas as pd
 import typer  # type: ignore[import-untyped]
 from dotenv import load_dotenv
@@ -11,49 +15,100 @@ from google.genai import types
 
 from model import CLOUD_KEY, RAIN_KEY, VISIBILITY_KEY, WIND_KEY, SurveyData, Surveys
 
-load_dotenv()
+BINARY_FORMATS = ["xlsx"]
+TEXT_FORMATS = []
+
+PROMPT = "Convert the information in this pdf file into the requested data structure"
+
+def xlsx_to_csv(xlsx_data: bytes) -> str:
+    workbook = openpyxl.load_workbook(BytesIO(xlsx_data), read_only=True)
+
+    if not workbook.worksheets:
+        return ""
+
+    # Just select the first sheet
+    sheet = workbook.worksheets[0]
+
+    csv_payload = StringIO()
+    csv_writer = csv.writer(csv_payload)
+
+    for row in sheet.rows:
+        row_values = [cell.value for cell in row]
+        csv_writer.writerow(row_values)
+
+    return csv_payload.getvalue()
 
 
-def extract(path: Path) -> None:
-    files = path.glob("*.pdf")
+def get_payload(file: Path) -> types.Part:
+    typer.echo(f"Extracting data from {file}")
+    if file.suffix[1:] in BINARY_FORMATS:
+        if file.suffix == ".xlsx":
+            with open(file, "rb") as fd:
+                file_payload = types.Part.from_text(text=xlsx_to_csv(fd.read()))
+        else:
+            with open(file, "rb") as fd:
+                file_payload = types.Part.from_bytes(data=fd.read(), mime_type=f"application/{file.suffix[1:]}")
+    else: # assume text
+        with open(file) as fd:
+            file_payload = types.Part.from_text(text=fd.read())
+    return file_payload
 
-    prompt = "Convert the information in this pdf file into the requested data structure"
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    model = os.environ["GEMINI_MODEL"]
 
-    surveys: list[SurveyData] = []
-    # for some reason sending all the files at once appears to ignore all but one of them
-    for file in files:
-        typer.echo(f"Extracting data from {file}")
-        with open(file, "rb") as fd:
-            file_payload = types.Part.from_bytes(data=fd.read(), mime_type="application/pdf")
-        messages = [prompt, file_payload]
-        response = client.models.generate_content(
-            model=model,
-            contents=messages,
-            config={
-                "response_mime_type": "application/json",
-                "response_schema": SurveyData,
-            },
-        )
-        surveys.append(cast(SurveyData, response.parsed))
-    output_file = path / "processed_surveys.json"
+def extract(path: Path, client: genai.Client, model: str) -> Path:
+
+    files = []
+    for ext in BINARY_FORMATS + TEXT_FORMATS:
+        files.extend(path.glob(f"*{ext}"))
+
+    file_contents = [get_payload(file) for file in files]
+
+    surveys = Surveys([extract_impl(client, model, file_content) for file_content in file_contents])
+
+    # dump output
+    output_file = path / f'processed_surveys{datetime.now().isoformat(timespec="seconds")}.json'
     with open(output_file, "w") as fd:
         fd.write(Surveys(surveys).model_dump_json(indent=2))  # type: ignore
     typer.echo(f"Wrote extracted data to {output_file}")
+    return output_file
 
 
-def transform(path: Path) -> None:
-    with open(path / "processed_surveys.json") as fd:
-        all_surveys = Surveys(json.load(fd))
+def extract_impl(client: genai.Client, model: str, file_content: types.Part) -> SurveyData:
 
-    output_file = path / "processed_surveys.xlsx"
+    # for some reason sending all the files at once appears to ignore all but one of them
+    messages = [PROMPT, file_content]
+    response = client.models.generate_content(
+        model=model,
+        contents=messages,
+        config={
+            "response_mime_type": "application/json",
+            "response_schema": SurveyData,
+        },
+    )
+
+    return cast(SurveyData, response.parsed)
+
+
+def transform(input_file: Path) -> None:
+    with open(input_file) as fd:
+        surveys = Surveys(json.load(fd))
+
+    output_file = input_file.with_suffix(".xlsx")
     typer.echo(f"Writing transformed data to {output_file}...")
+
+    output_content = transform_impl(surveys)
+
+    with open(output_file, "wb") as fd:
+        fd.write(output_content)
+
+    typer.echo("Done")
+
+
+def transform_impl(all_surveys: Surveys) -> bytes:
+    output_file = BytesIO()
 
     with pd.ExcelWriter(output_file, engine="xlsxwriter") as writer:
         for survey_data in all_surveys:
             sheet_name = f"Transect {survey_data.transect_number}"
-            typer.echo(f"Creating sheet {sheet_name}")
 
             all_sightings = []
 
@@ -143,13 +198,23 @@ def transform(path: Path) -> None:
             worksheet.set_column(1, 2, 25)
             worksheet.set_column(3, 3, 5)
             worksheet.set_column(4, 4 + len(sightings_data.columns), 15)
-    typer.echo("Done")
+
+    return output_file.getvalue()
 
 
 def main(path: Path) -> None:
-    extract(path)
-    transform(path)
+    load_dotenv()
+
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    model = os.environ["GEMINI_MODEL"]
+
+    extract_data_file = extract(path, client, model)
+    transform(extract_data_file)
 
 
 if __name__ == "__main__":
     typer.run(main)
+    # print(extract_csv(Path("/home/az/Home/IlkleyMoorBirdSurvey/Transect 6_visit 1_20250420.xlsx")))
+
+# Transect 6_visit 1_20250420.xlsx
+# Transect 9_visit 1_20250422.xlsx

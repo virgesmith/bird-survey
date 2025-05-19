@@ -6,16 +6,15 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "google-genai>=1.15.0",
+    "openpyxl>=3.1.5",
     "pandas>=2.2.3",
     "pandas-stubs>=2.2.3.250308",
     "pydantic>=2.11.4",
     "python-dotenv>=1.1.0",
+    "streamlit>=1.45.1",
     "typer>=0.15.4",
     "xlsxwriter>=3.2.3",
 ]
-
-[project.scripts]
-process = "bird_survey:main"
 
 [dependency-groups]
 dev = [
