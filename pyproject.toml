@@ -19,6 +19,9 @@ dependencies = [
 [tool.uv]
 package = false
 
+[tool.poetry]
+package-mode = false
+
 [dependency-groups]
 dev = [
     "mypy>=1.15.0",
