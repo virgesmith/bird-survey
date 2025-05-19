@@ -16,6 +16,8 @@ dependencies = [
     "xlsxwriter>=3.2.3",
 ]
 
+package-mode = false
+
 [dependency-groups]
 dev = [
     "mypy>=1.15.0",
