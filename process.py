@@ -15,10 +15,11 @@ from google.genai import types
 
 from model import CLOUD_KEY, RAIN_KEY, VISIBILITY_KEY, WIND_KEY, SurveyData, Surveys
 
-BINARY_FORMATS = ["xlsx"]
-TEXT_FORMATS = []
+BINARY_FORMATS = ["pdf", "xlsx"]
+TEXT_FORMATS: list[str] = []
 
 PROMPT = "Convert the information in this pdf file into the requested data structure"
+
 
 def xlsx_to_csv(xlsx_data: bytes) -> str:
     workbook = openpyxl.load_workbook(BytesIO(xlsx_data), read_only=True)
@@ -48,15 +49,14 @@ def get_payload(file: Path) -> types.Part:
         else:
             with open(file, "rb") as fd:
                 file_payload = types.Part.from_bytes(data=fd.read(), mime_type=f"application/{file.suffix[1:]}")
-    else: # assume text
+    else:  # assume text
         with open(file) as fd:
             file_payload = types.Part.from_text(text=fd.read())
     return file_payload
 
 
 def extract(path: Path, client: genai.Client, model: str) -> Path:
-
-    files = []
+    files: list[Path] = []
     for ext in BINARY_FORMATS + TEXT_FORMATS:
         files.extend(path.glob(f"*{ext}"))
 
@@ -65,7 +65,7 @@ def extract(path: Path, client: genai.Client, model: str) -> Path:
     surveys = Surveys([extract_impl(client, model, file_content) for file_content in file_contents])
 
     # dump output
-    output_file = path / f'processed_surveys{datetime.now().isoformat(timespec="seconds")}.json'
+    output_file = path / f"processed_surveys{datetime.now().isoformat(timespec='seconds')}.json"
     with open(output_file, "w") as fd:
         fd.write(Surveys(surveys).model_dump_json(indent=2))  # type: ignore
     typer.echo(f"Wrote extracted data to {output_file}")
@@ -73,12 +73,11 @@ def extract(path: Path, client: genai.Client, model: str) -> Path:
 
 
 def extract_impl(client: genai.Client, model: str, file_content: types.Part) -> SurveyData:
-
     # for some reason sending all the files at once appears to ignore all but one of them
     messages = [PROMPT, file_content]
     response = client.models.generate_content(
         model=model,
-        contents=messages,
+        contents=messages,  # type: ignore[arg-type]
         config={
             "response_mime_type": "application/json",
             "response_schema": SurveyData,
@@ -180,7 +179,7 @@ def transform_impl(all_surveys: Surveys) -> bytes:
             )
 
             workbook = writer.book
-            header_format = workbook.add_format(
+            header_format = workbook.add_format(  # type: ignore[union-attr]
                 {
                     "bold": True,
                     "text_wrap": True,

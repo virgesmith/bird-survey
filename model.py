@@ -17,7 +17,7 @@ WIND_KEY = ["", "calm", "light", "breezy"]
 VISIBILITY_KEY = ["", "good", "moderate", "poor"]
 
 
-class BtoSpeciesCode(StrEnum):  # noqa: F821
+class BtoSpeciesCode(StrEnum):
     """
     Enumeration of BTO Species Codes from the provided image.
 
@@ -162,4 +162,3 @@ class Surveys(RootModel[list[SurveyData]]):
 
     def append(self, survey_data: SurveyData) -> None:
         self.root.append(survey_data)
-

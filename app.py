@@ -5,17 +5,49 @@ import streamlit as st
 from google import genai  # type: ignore[import-untyped]
 from google.genai import types
 
-from model import Surveys
-from process import extract_impl, transform_impl, xlsx_to_csv
+from model import BtoSpeciesCode, Surveys
+from process import BINARY_FORMATS, extract_impl, transform_impl, xlsx_to_csv
 
 MODEL = "gemini-2.5-flash-preview-04-17"
 
-def main() -> None:
-    st.title(":owl::bird::eagle::duck: Bird Survey Converter")
-    st.markdown("Upload handwritten forms (pdf format), compile to a spreadsheet...")
+st.set_page_config(
+    page_title=f"AI Bird Survey Scanner",
+    layout="wide",
+    page_icon=":bird:",
+    menu_items={
+        "Report a bug": "https://github.com/virgesmith/bird-survey",
+    }
+)
 
-    st.text_input("Please input a valid Gemini API key", key="api_key")
-    st.file_uploader("Upload one of more surveys...", type=["pdf", "xlsx"], accept_multiple_files=True, key="files")
+
+
+def main() -> None:
+    st.title(":owl::eagle::duck: AI Bird Survey Scanner")
+
+    st.text_input(
+        "Please provide a valid Gemini API key. If you have a google account you can get a free key [here](https://aistudio.google.com/app/apikey)",
+        key="api_key",
+    )
+
+    st.markdown("#### Step 1: Upload handwritten forms (pdf format) or spreadsheets")
+    st.markdown("#### Step 2: AI converts and collates the input files...")
+    st.markdown("#### Step 3: Download the resulting spreadsheet")
+
+    with st.expander("More details..."):
+        st.markdown("""The survey route is typically split into 10 segments, each represented on the form
+                    divided into left and right sections. Observations are written into the appropriate section using
+                    species codes, optionally a number and/or a short description (e.g. "flying").
+                    Note that descriptions are (deliberately) *not* rendered in the output.
+                    Forms typically look like something this:""")
+        st.image("./img/raw_data.png")
+        st.markdown("""Spreadsheets have no specific format. The AI will only process the first
+                    workbook. Results may vary. The species codes that the AI "knows" about are:""")
+        code_list = [f"`{code}`: {code.bird_name}" for code in BtoSpeciesCode]
+        cols = st.columns(3)
+        for i, col in enumerate(cols):
+            col.markdown("\n\n".join(code_list[i::3]))
+
+    st.file_uploader("Upload one or more surveys...", type=BINARY_FORMATS, accept_multiple_files=True, key="files")
 
     file_payloads = {}
     for file in st.session_state.files:
@@ -36,12 +68,11 @@ def main() -> None:
             client = genai.Client(api_key=st.session_state.api_key)
 
             surveys = Surveys([])
-            progress_bar = st.progress(0, text="")
-            n_files = len(file_payloads)
-            for i, (file_name, file_content) in enumerate(file_payloads.items()):
-                progress_bar.progress(i / n_files, file_name)
-                surveys.append(extract_impl(client, MODEL, file_content))
-            progress_bar.progress(1.0, "Complete")
+            with st.status("Downloading data...", expanded=True) as status:
+                for file_name, file_content in file_payloads.items():
+                    status.update(label=f"Scanning {file_name}...", state="running")
+                    surveys.append(extract_impl(client, MODEL, file_content))
+                status.update(label="Complete", state="complete")
 
             spreadsheet_content = transform_impl(surveys)
 
@@ -52,6 +83,7 @@ def main() -> None:
             )
     except Exception as e:
         st.error(e)
+
 
 if __name__ == "__main__":
     main()
