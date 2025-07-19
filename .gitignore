@@ -15,3 +15,5 @@ wheels/
 
 uv.lock
 .python-version
+
+data/

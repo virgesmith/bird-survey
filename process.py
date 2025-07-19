@@ -65,7 +65,7 @@ def extract(path: Path, client: genai.Client, model: str) -> Path:
     surveys = Surveys([extract_impl(client, model, file_content) for file_content in file_contents])
 
     # dump output
-    output_file = path / f"processed_surveys{datetime.now().isoformat(timespec='seconds')}.json"
+    output_file = Path(f"{path}_processed_{datetime.now().isoformat(timespec='seconds')}.json")
     with open(output_file, "w") as fd:
         fd.write(Surveys(surveys).model_dump_json(indent=2))  # type: ignore
     typer.echo(f"Wrote extracted data to {output_file}")
@@ -101,13 +101,19 @@ def transform(input_file: Path) -> None:
 
     typer.echo("Done")
 
+def _sanitise(value: str) -> str:
+    """Sanitise a string to be used as a sheet name in Excel."""
+    for bad, good in (("/", "-"), ("\\", "-"), ("?", ""), ("*", ""), (":", ""), ("[", "("), ("]", ")")):
+        value = value.replace(bad, good)
+    return value
+
 
 def transform_impl(all_surveys: Surveys) -> bytes:
     output_file = BytesIO()
 
     with pd.ExcelWriter(output_file, engine="xlsxwriter") as writer:
         for survey_data in all_surveys:
-            sheet_name = f"Transect {survey_data.transect_number}"
+            sheet_name = f"Transect {survey_data.transect_number} ({_sanitise(survey_data.visit_date)})"
 
             all_sightings = []
 
@@ -213,7 +219,3 @@ def main(path: Path) -> None:
 
 if __name__ == "__main__":
     typer.run(main)
-    # print(extract_csv(Path("/home/az/Home/IlkleyMoorBirdSurvey/Transect 6_visit 1_20250420.xlsx")))
-
-# Transect 6_visit 1_20250420.xlsx
-# Transect 9_visit 1_20250422.xlsx
