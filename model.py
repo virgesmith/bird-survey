@@ -160,5 +160,8 @@ class Surveys(RootModel[list[SurveyData]]):
     def __iter__(self) -> Iterator[SurveyData]:  # type:ignore[override]
         return iter(self.root)
 
+    def __len__(self) -> int:
+        return len(self.root)
+
     def append(self, survey_data: SurveyData) -> None:
         self.root.append(survey_data)
