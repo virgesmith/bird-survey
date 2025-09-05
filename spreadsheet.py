@@ -4,17 +4,12 @@ from pathlib import Path
 import openpyxl
 from openpyxl.styles import Alignment, PatternFill
 
-from model import SurveyData, Surveys
+from model import CLOUD_KEY, RAIN_KEY, VISIBILITY_KEY, WIND_KEY, Surveys
 
 
-def export_survey_to_excel(surveys: list[SurveyData], filename: Path):
-    wb = openpyxl.Workbook()
-    # TODO multiple worksheets
-    ws = wb.active
-    ws.title = "draft"
-
+def export_survey_to_excel(ws, surveys: Surveys):
     # Header rows
-    ws["B1"] = f"Transect number: {filename.name.split('_')[0]}"
+    ws["B1"] = f"Transect number: {ws.title}"
     ws["B2"] = "km square grid reference: TODO"
 
     # Segment headers
@@ -39,6 +34,11 @@ def export_survey_to_excel(surveys: list[SurveyData], filename: Path):
         ws.cell(row=row + 5, column=1, value="end time:")
         ws.cell(row=row + 6, column=1, value="start time:")
         ws.cell(row=row + 7, column=1, value="end time:")
+        ws.cell(row=row + 8, column=1, value="Weather")
+        ws.cell(row=row + 9, column=1, value="cloud:")
+        ws.cell(row=row + 10, column=1, value="rain:")
+        ws.cell(row=row + 11, column=1, value="wind:")
+        ws.cell(row=row + 12, column=1, value="visibility:")
 
         # Fill survey metadata
         ws.cell(row=row + 1, column=2, value=survey.visit_date)
@@ -48,7 +48,10 @@ def export_survey_to_excel(surveys: list[SurveyData], filename: Path):
         ws.cell(row=row + 6, column=2, value=survey.second_segment_start_time)
         ws.cell(row=row + 7, column=2, value=survey.second_segment_end_time)
 
-        # TODO weather...
+        ws.cell(row=row + 9, column=2, value=CLOUD_KEY[survey.weather_code.cloud])
+        ws.cell(row=row + 10, column=2, value=RAIN_KEY[survey.weather_code.rain])
+        ws.cell(row=row + 11, column=2, value=WIND_KEY[survey.weather_code.wind])
+        ws.cell(row=row + 12, column=2, value=VISIBILITY_KEY[survey.weather_code.visibility])
 
         # Fill sightings for each segment
         for segment in survey.segments:
@@ -57,17 +60,17 @@ def export_survey_to_excel(surveys: list[SurveyData], filename: Path):
             col_base = -1 + seg_idx * 4
             # Left
             for sight_idx, sight in enumerate(segment.left):
-                ws.cell(row=row + 3 + sight_idx, column=col_base, value=sight.code.bird_name)
-                ws.cell(row=row + 3 + sight_idx, column=col_base + 1, value=sight.count or 1)
+                ws.cell(row=row + 1 + sight_idx, column=col_base, value=sight.code.bird_name)
+                ws.cell(row=row + 1 + sight_idx, column=col_base + 1, value=sight.count or 1)
             # Right
             for sight_idx, sight in enumerate(segment.right):
-                ws.cell(row=row + 3 + sight_idx, column=col_base + 2, value=sight.code.bird_name)
-                ws.cell(row=row + 3 + sight_idx, column=col_base + 3, value=sight.count or 1)
+                ws.cell(row=row + 1 + sight_idx, column=col_base + 2, value=sight.code.bird_name)
+                ws.cell(row=row + 1 + sight_idx, column=col_base + 3, value=sight.count or 1)
 
     # format columns and fill
     # Iterate through all columns in the worksheet, use the column_dimensions property to get the column object,
     for col in ws.columns:
-        ws.column_dimensions[col[0].column_letter].width = 18
+        ws.column_dimensions[col[0].column_letter].width = 15
     ws.column_dimensions["B"].width = 24
 
     alternate = False
@@ -77,18 +80,26 @@ def export_survey_to_excel(surveys: list[SurveyData], filename: Path):
             cell.alignment = Alignment(horizontal="left")
             cell.fill = PatternFill(start_color=bg, end_color=bg, fill_type="solid")
         alternate = not alternate
-    wb.save(filename)
-
-
-# Example usage:
 
 
 def main() -> None:
+    wb = openpyxl.Workbook()
+    if "Sheet" in wb.sheetnames:
+        wb.remove(wb["Sheet"])
     for file in Path("./data").glob("*.json"):
         with open(file) as fd:
             surveys = Surveys(json.load(fd))
-            # for s in surveys:
-            export_survey_to_excel(surveys, file.with_suffix(".xlsx"))
+
+            transect = {s.transect_number for s in surveys}
+            # for now only one transect per file
+            assert len(transect) == 1
+            ws = wb.create_sheet(title=f"Transect {list(transect)[0]}")
+            export_survey_to_excel(ws, surveys)
+    # Sort worksheets alphabetically by title before saving
+    sorted_sheets = sorted(wb.worksheets, key=lambda ws: ws.title)
+    for idx, ws in enumerate(sorted_sheets):
+        wb._sheets[idx] = ws
+    wb.save("./data/all_surveys.xls")
 
 
 if __name__ == "__main__":
