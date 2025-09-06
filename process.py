@@ -1,90 +1,66 @@
-import csv
 import json
 import os
 from datetime import datetime
-from io import BytesIO, StringIO
+from io import BytesIO
 from pathlib import Path
 from typing import cast
 
-import openpyxl
 import pandas as pd
 import typer  # type: ignore[import-untyped]
 from dotenv import load_dotenv
 from google import genai  # type: ignore[import-untyped]
 from google.genai import types
+from itrx import Itr
 
 from model import CLOUD_KEY, RAIN_KEY, VISIBILITY_KEY, WIND_KEY, SurveyData, Surveys
+from spreadsheet import export_to_excel
 
-BINARY_FORMATS = ["pdf", "xlsx"]
-TEXT_FORMATS: list[str] = []
+BINARY_FORMATS = ["pdf"]
 
-PROMPT = "Convert the information in this pdf file into the requested data structure"
-
-
-def xlsx_to_csv(xlsx_data: bytes) -> str:
-    workbook = openpyxl.load_workbook(BytesIO(xlsx_data), read_only=True)
-
-    if not workbook.worksheets:
-        return ""
-
-    # Just select the first sheet
-    sheet = workbook.worksheets[0]
-
-    csv_payload = StringIO()
-    csv_writer = csv.writer(csv_payload)
-
-    for row in sheet.rows:
-        row_values = [cell.value for cell in row]
-        csv_writer.writerow(row_values)
-
-    return csv_payload.getvalue()
+PROMPT = "Convert the information in this pdf file into the requested data structure. "
+"Dates will be in UK format. Ensure the visit_date field is formatted as YYYY-MM-DD"
 
 
-def get_payload(file: Path) -> types.Part:
+def get_payload(file: Path) -> types.Part | None:
     typer.echo(f"Extracting data from {file}")
     if file.suffix[1:] in BINARY_FORMATS:
-        if file.suffix == ".xlsx":
-            with open(file, "rb") as fd:
-                file_payload = types.Part.from_text(text=xlsx_to_csv(fd.read()))
-        else:
-            with open(file, "rb") as fd:
-                file_payload = types.Part.from_bytes(data=fd.read(), mime_type=f"application/{file.suffix[1:]}")
-    else:  # assume text
-        with open(file) as fd:
-            file_payload = types.Part.from_text(text=fd.read())
-    return file_payload
+        with open(file, "rb") as fd:
+            file_payload = types.Part.from_bytes(data=fd.read(), mime_type=f"application/{file.suffix[1:]}")
+        return file_payload
 
 
 def extract(path: Path, client: genai.Client, model: str) -> Path:
     files: list[Path] = []
-    for ext in BINARY_FORMATS + TEXT_FORMATS:
+    for ext in BINARY_FORMATS: # + TEXT_FORMATS:
         files.extend(path.glob(f"*{ext}"))
 
-    file_contents = [get_payload(file) for file in files]
+    file_contents = Itr(get_payload(file) for file in files)
 
-    surveys = Surveys([extract_impl(client, model, file_content) for file_content in file_contents])
+    #surveys = Surveys([extract_impl(client, model, file_content) for file_content in file_contents])
+    surveys = extract_impl(client, model, file_contents)
 
     # dump output
     output_file = Path(f"{path}_processed_{datetime.now().isoformat(timespec='seconds')}.json")
     with open(output_file, "w") as fd:
-        fd.write(Surveys(surveys).model_dump_json(indent=2))  # type: ignore
+        fd.write(surveys.model_dump_json(indent=2))  # type: ignore
     typer.echo(f"Wrote extracted data to {output_file}")
     return output_file
 
 
-def extract_impl(client: genai.Client, model: str, file_content: types.Part) -> SurveyData:
+def extract_impl(client: genai.Client, model: str, file_content: list[types.Part]) -> Surveys:
     # for some reason sending all the files at once appears to ignore all but one of them
-    messages = [PROMPT, file_content]
+    messages = [PROMPT, *file_content]
+
     response = client.models.generate_content(
         model=model,
         contents=messages,  # type: ignore[arg-type]
         config={
             "response_mime_type": "application/json",
-            "response_schema": SurveyData,
+            "response_schema": Surveys,
         },
     )
 
-    return cast(SurveyData, response.parsed)
+    return response.parsed
 
 
 def transform(input_file: Path) -> None:
@@ -100,6 +76,7 @@ def transform(input_file: Path) -> None:
         fd.write(output_content)
 
     typer.echo("Done")
+
 
 def _sanitise(value: str) -> str:
     """Sanitise a string to be used as a sheet name in Excel."""
@@ -214,8 +191,16 @@ def main(path: Path) -> None:
     model = os.environ["GEMINI_MODEL"]
 
     extract_data_file = extract(path, client, model)
-    transform(extract_data_file)
+    # extract_data_file = "data/input_processed_2025-09-06T13:36:17.json"
+    with open(extract_data_file) as fd:
+        surveys = Surveys(json.load(fd))
+    workbook = export_to_excel(surveys)
 
+    buffer = BytesIO()
+    workbook.save(buffer)
+
+    with open("test.xlsx", "wb") as fd:
+        fd.write(buffer.getvalue())
 
 if __name__ == "__main__":
     typer.run(main)

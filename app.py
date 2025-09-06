@@ -1,4 +1,5 @@
 from datetime import datetime
+from io import BytesIO
 
 # from streamlit_pdf_viewer import pdf_viewer
 import streamlit as st
@@ -6,19 +7,19 @@ from google import genai  # type: ignore[import-untyped]
 from google.genai import types
 
 from model import BtoSpeciesCode, Surveys
-from process import BINARY_FORMATS, extract_impl, transform_impl, xlsx_to_csv
+from process import BINARY_FORMATS, extract_impl, transform_impl
+from spreadsheet import export_to_excel
 
-MODEL = "gemini-2.5-flash-preview-04-17"
+MODEL = "gemini-2.5-flash"
 
 st.set_page_config(
-    page_title=f"AI Bird Survey Scanner",
+    page_title="AI Bird Survey Scanner",
     layout="wide",
     page_icon=":bird:",
     menu_items={
         "Report a bug": "https://github.com/virgesmith/bird-survey",
-    }
+    },
 )
-
 
 
 def main() -> None:
@@ -51,10 +52,7 @@ def main() -> None:
 
     file_payloads = {}
     for file in st.session_state.files:
-        if file.name.endswith("xlsx"):
-            file_payloads[file.name] = types.Part.from_text(text=xlsx_to_csv(file.getvalue()))
-        else:
-            file_payloads[file.name] = types.Part.from_bytes(data=file.getvalue(), mime_type=file.type)
+        file_payloads[file.name] = types.Part.from_bytes(data=file.getvalue(), mime_type=file.type)
     go = st.button("Process...")
 
     try:
@@ -74,11 +72,15 @@ def main() -> None:
                     surveys.append(extract_impl(client, MODEL, file_content))
                 status.update(label="Complete", state="complete")
 
-            spreadsheet_content = transform_impl(surveys)
+            # spreadsheet_content = transform_impl(surveys)
+            spreadsheet = export_to_excel(surveys)
+
+            spreadsheet_content = BytesIO()
+            spreadsheet.save(spreadsheet_content)
 
             st.download_button(
                 "Download spreadsheet...",
-                data=spreadsheet_content,
+                data=spreadsheet_content.getbuffer(),
                 file_name=f"BirdSurvey{datetime.now().isoformat(timespec='seconds')}.xlsx",
             )
     except Exception as e:

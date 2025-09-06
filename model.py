@@ -1,5 +1,7 @@
 from collections.abc import Iterator
+from datetime import date
 from enum import StrEnum
+from typing import Self
 
 from pydantic import BaseModel, RootModel
 
@@ -146,7 +148,7 @@ class Segment(BaseModel):
 class SurveyData(BaseModel):
     observer_name: str
     transect_number: int
-    visit_date: str
+    visit_date: date
     weather_code: Weather
     first_segment_start_time: str
     first_segment_end_time: str
@@ -165,3 +167,7 @@ class Surveys(RootModel[list[SurveyData]]):
 
     def append(self, survey_data: SurveyData) -> None:
         self.root.append(survey_data)
+
+    def extend(self, surveys: Self) -> None:
+        self.root.extend(surveys)
+
