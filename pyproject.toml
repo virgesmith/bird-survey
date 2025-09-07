@@ -27,6 +27,10 @@ dev = [
 [tool.uv]
 package = false
 
+# streamlit needs this
+[tool.poetry]
+package-mode = false
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "Q", "I", "UP", "B", "SIM"]
 
