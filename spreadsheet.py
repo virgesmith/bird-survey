@@ -15,7 +15,6 @@ def safe_get(choices: list[str], index: int) -> str | int:
     return index
 
 
-
 def apply_border(ws, start_col: int, end_col: int, start_row: int, end_row: int) -> None:
     border = Side(border_style="thin", color="000000")
 

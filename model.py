@@ -170,4 +170,3 @@ class Surveys(RootModel[list[SurveyData]]):
 
     def extend(self, surveys: Self) -> None:
         self.root.extend(surveys)
-

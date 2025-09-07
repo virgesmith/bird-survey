@@ -6,8 +6,8 @@ import streamlit as st
 from google import genai  # type: ignore[import-untyped]
 from google.genai import types
 
-from model import BtoSpeciesCode, Surveys
-from process import BINARY_FORMATS, extract_impl, transform_impl
+from extract import FORMATS, extract_impl
+from model import BtoSpeciesCode
 from spreadsheet import export_to_excel
 
 MODEL = "gemini-2.5-flash"
@@ -30,7 +30,7 @@ def main() -> None:
         key="api_key",
     )
 
-    st.markdown("#### Step 1: Upload handwritten forms (pdf format) or spreadsheets")
+    st.markdown("#### Step 1: Upload scanned survey forms (pdf format)")
     st.markdown("#### Step 2: AI converts and collates the input files...")
     st.markdown("#### Step 3: Download the resulting spreadsheet")
 
@@ -48,11 +48,14 @@ def main() -> None:
         for i, col in enumerate(cols):
             col.markdown("\n\n".join(code_list[i::3]))
 
-    st.file_uploader("Upload one or more surveys...", type=BINARY_FORMATS, accept_multiple_files=True, key="files")
+    st.file_uploader("Upload one or more surveys...", type=FORMATS, accept_multiple_files=True, key="files")
 
-    file_payloads = {}
-    for file in st.session_state.files:
-        file_payloads[file.name] = types.Part.from_bytes(data=file.getvalue(), mime_type=file.type)
+    # file_payloads = {}
+    # for file in st.session_state.files:
+    #     file_payloads[file.name] = types.Part.from_bytes(data=file.getvalue(), mime_type=file.type)
+    file_payloads = [
+        types.Part.from_bytes(data=file.getvalue(), mime_type=file.type) for file in st.session_state.files
+    ]
     go = st.button("Process...")
 
     try:
@@ -65,14 +68,15 @@ def main() -> None:
                 return
             client = genai.Client(api_key=st.session_state.api_key)
 
-            surveys = Surveys([])
-            with st.status("Downloading data...", expanded=True) as status:
-                for file_name, file_content in file_payloads.items():
-                    status.update(label=f"Scanning {file_name}...", state="running")
-                    surveys.append(extract_impl(client, MODEL, file_content))
+            with st.status("Uploading data...", expanded=True) as status:
+                surveys = extract_impl(client, MODEL, file_payloads)
+                # with open("data/input_processed_2025-09-06T14:08:22.json") as fd:
+                #     surveys = Surveys(json.load(fd))
                 status.update(label="Complete", state="complete")
 
-            # spreadsheet_content = transform_impl(surveys)
+            with open(f"BirdSurvey{datetime.now().isoformat(timespec='seconds')}.json", "w") as fd:
+                fd.write(surveys.model_dump_json())
+
             spreadsheet = export_to_excel(surveys)
 
             spreadsheet_content = BytesIO()
@@ -80,7 +84,7 @@ def main() -> None:
 
             st.download_button(
                 "Download spreadsheet...",
-                data=spreadsheet_content.getbuffer(),
+                data=spreadsheet_content.getvalue(),
                 file_name=f"BirdSurvey{datetime.now().isoformat(timespec='seconds')}.xlsx",
             )
     except Exception as e:
